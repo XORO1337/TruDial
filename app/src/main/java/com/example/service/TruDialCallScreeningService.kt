@@ -1,11 +1,9 @@
 package com.example.service
 
-import android.content.Intent
 import android.net.Uri
 import android.telecom.Call
 import android.telecom.CallScreeningService
 import android.util.Log
-import com.example.MainActivity
 import com.example.data.AppDatabase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -71,17 +69,10 @@ class TruDialCallScreeningService : CallScreeningService() {
                 }
 
                 withContext(Dispatchers.Main) {
+                    // Screening only decides allow/block here. Surfacing the monitoring UI is handled
+                    // by TruDialInCallService once the call is answered (a background startActivity at
+                    // ring time is blocked on Android 10+ anyway).
                     respondToCall(callDetails, responseBuilder.build())
-
-                    if (!isSpam) {
-                        // Launch the main activity with intent to monitor
-                        val i = Intent(this@TruDialCallScreeningService, MainActivity::class.java).apply {
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                            putExtra("start_monitoring", true)
-                            putExtra("caller_id", phoneNumber)
-                        }
-                        startActivity(i)
-                    }
                 }
             }
         } else {

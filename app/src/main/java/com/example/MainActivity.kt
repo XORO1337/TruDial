@@ -17,6 +17,7 @@ import com.example.ui.theme.MyApplicationTheme
 
 class MainActivity : ComponentActivity() {
   val startMonitoringState = mutableStateOf(false)
+  val incomingCallState = mutableStateOf(false)
   val callerIdState = mutableStateOf("")
 
   override fun onCreate(savedInstanceState: Bundle?) {
@@ -37,9 +38,13 @@ class MainActivity : ComponentActivity() {
       }
 
       MyApplicationTheme(darkTheme = isDarkTheme) {
-        MainApp(startMonitoringState.value, callerIdState.value) {
-            startMonitoringState.value = false
-        }
+        MainApp(
+            startMonitoring = startMonitoringState.value,
+            incomingCall = incomingCallState.value,
+            callerId = callerIdState.value,
+            onMonitoringStarted = { startMonitoringState.value = false },
+            onIncomingHandled = { incomingCallState.value = false }
+        )
       }
     }
   }
@@ -50,7 +55,10 @@ class MainActivity : ComponentActivity() {
   }
 
   private fun handleIntent(intent: Intent?) {
-      if (intent?.getBooleanExtra("start_monitoring", false) == true) {
+      if (intent?.getBooleanExtra("incoming_call", false) == true) {
+          incomingCallState.value = true
+          callerIdState.value = intent.getStringExtra("caller_id") ?: "Unknown"
+      } else if (intent?.getBooleanExtra("start_monitoring", false) == true) {
           startMonitoringState.value = true
           callerIdState.value = intent.getStringExtra("caller_id") ?: "Unknown"
       }
