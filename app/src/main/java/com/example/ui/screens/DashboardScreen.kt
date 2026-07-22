@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Report
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -54,6 +55,7 @@ fun DashboardScreen(
     onReportIncident: (Int) -> Unit,
     onSettingsClick: () -> Unit,
     onHistoryClick: () -> Unit,
+    onSimulateScamCall: () -> Unit = {},
     viewModel: DashboardViewModel = viewModel(factory = DashboardViewModelFactory(LocalContext.current))
 ) {
     val incidents by viewModel.incidents.collectAsState()
@@ -175,9 +177,40 @@ fun DashboardScreen(
                 .fillMaxSize()
         ) {
             SummaryCard(highRiskCount)
-            
+
+            // Demo controls — try the detection pipeline without a live call.
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onSimulateCall,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(Icons.Default.Call, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Simulate Call")
+                }
+                Button(
+                    onClick = onSimulateScamCall,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(Icons.Default.Warning, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Scam Demo")
+                }
+            }
+
             Spacer(modifier = Modifier.height(24.dp))
-            
+
             Text(
                 "Recent Incidents",
                 style = MaterialTheme.typography.titleLarge,

@@ -2,22 +2,25 @@
 
 ![TruDial Banner](https://placehold.co/1200x400/0f172a/38bdf8?text=TruDial:+AI+Call+Protection)
 
-**TruDial** is an advanced, offline-first Android application designed to protect users against digital arrests, social engineering, and phone scams using real-time AI call analysis. By leveraging a Local Large Language Model (LLM), TruDial guarantees complete privacy—your call data never leaves your device!
+**TruDial** is an Android call-protection app that detects **digital arrest**, authority-impersonation, and social-engineering scams in real time. It becomes your device's phone app, transcribes the live conversation, and scores it against a digital-arrest checklist using an LLM — either **on-device** (private) or a **cloud model** (Groq) that you enable with your own API key.
 
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](#)
 [![Platform](https://img.shields.io/badge/platform-Android-3DDC84?logo=android)](#)
-[![Privacy](https://img.shields.io/badge/privacy-Offline_First-blue)](#)
 [![License](https://img.shields.io/badge/license-MIT-green)](#)
 
 ---
 
 ## 🌟 Key Features
 
-*   **🎙️ Real-Time Call Analysis:** Continuously monitors active calls to detect malicious intent or scam scripts (like fake Cybercell or digital arrest scenarios).
-*   **🔒 Offline-First AI:** Powered by an on-device local LLM (Llama 2 via `llama.cpp`). No cloud dependencies, ensuring zero data leakage and total privacy.
-*   **⚠️ Instant Scam Alerts:** Provides high-visibility warnings during a call if a high-risk conversation pattern is detected.
-*   **📊 Security Dashboard:** Review your recent calls, blocked scams, and overall safety score in a sleek Material Design 3 interface.
-*   **📝 One-Tap Reporting:** Easily report malicious numbers and view automatically generated incident reports.
+*   **📞 Default Phone App:** Implements an `InCallService`, so TruDial owns the in-call experience — its own **incoming-call screen** (Answer/Decline), **hold**, hang-up, and automatic **speakerphone** routing.
+*   **🎙️ Live Transcription:** Transcribes the active call with **Groq Whisper** (`whisper-large-v3-turbo`) when a Groq key is configured, or the on-device Android `SpeechRecognizer` as a fallback. The transcript panel auto-scrolls as speech arrives.
+*   **🧠 Hybrid AI Analysis:** Choose your engine:
+    *   **On-device LLM** (MediaPipe LLM Inference) for high-RAM phones — fully private.
+    *   **Cloud (Groq `llama-3.1-8b-instant`)** — selectable with your own Groq API key, even on capable phones.
+*   **✅ Digital-Arrest Rubric:** Scores the whole conversation against a 7-point scam checklist and requires **multiple indicators** before raising risk, so a genuine call isn't flagged on a single line.
+*   **🚫 Call Screening:** A `CallScreeningService` auto-blocks numbers with prior high-risk incidents.
+*   **⚠️ Instant Alerts + Auto-Hold:** High-visibility warnings during the call, haptic feedback, and automatic hold when risk hits **Extreme**.
+*   **📊 Security Dashboard:** Recent incidents, blocked scams, one-tap Cybercell reporting, and a **Scam Demo** button to exercise the full pipeline without a live call.
 
 ---
 
@@ -33,11 +36,13 @@
 
 ## 🛠️ Technology Stack
 
-*   **UI Framework:** Jetpack Compose (Material Design 3)
+*   **UI:** Jetpack Compose (Material Design 3), MVVM
 *   **Language:** Kotlin
-*   **AI Engine:** Local LLM Integration (`llama.cpp` wrapper for Android)
-*   **Local Storage:** Room Database for persistent call history and settings
-*   **Architecture:** MVVM (Model-View-ViewModel)
+*   **Telephony:** `InCallService` (default dialer) + `CallScreeningService`
+*   **On-device AI:** MediaPipe GenAI LLM Inference
+*   **Cloud AI:** Groq — `llama-3.1-8b-instant` (analysis) and `whisper-large-v3-turbo` (speech-to-text), via OkHttp
+*   **Storage:** Room (call history / incidents) + DataStore Preferences (settings)
+*   **Auth:** Firebase Auth (Google Sign-In)
 
 ---
 
@@ -45,35 +50,68 @@
 
 ### Prerequisites
 
-*   Android Studio (Latest version)
-*   Android SDK 36 (Minimum SDK 24)
-*   A physical Android device or emulator with at least 4GB of RAM (for running the local LLM smoothly).
+*   Android Studio (latest)
+*   Android SDK 36 (min SDK 24)
+*   A physical device recommended (telephony features need a real phone stack)
+*   ~7 GB+ RAM to run the on-device model; otherwise use the Groq cloud engine
 
 ### Installation
 
 1.  **Clone the Repository:**
     ```bash
-    git clone https://github.com/your-username/trudial.git
+    git clone https://github.com/XORO1337/trudial.git
     cd trudial
     ```
 
-2.  **Environment Setup:**
-    Create a `.env` file in the project root (you can copy from `.env.example`).
+2.  **Environment (`.env`):** Copy the example and adjust as needed. Build-config values are generated from `.env` (merged over `.env.example`) by the Secrets Gradle plugin.
     ```bash
     cp .env.example .env
     ```
-    *TruDial relies exclusively on local models, so no cloud API keys are required for core functionality!*
+    Keys of interest:
+    *   `LOCAL_MODEL_URL` — on-device model download URL
+    *   `TTS_API_KEY` — text-to-speech key (e.g. a Groq key)
+    *   `AI_API_URL` / `AI_API_KEY` / `AI_MODEL` — default cloud fallback (OpenRouter)
 
-3.  **Build and Run:**
-    Open the project in Android Studio, sync Gradle, and run the `app` module.
+3.  **Groq key (for cloud analysis + Whisper STT):** Enter it in the app during the **setup wizard** ("Choose AI Engine → Cloud (Groq)") or later under **Settings → AI Engine**. It is stored on-device in DataStore, not in the build.
+
+4.  **Build & run:**
+    ```bash
+    ./gradlew :app:assembleDebug
+    ```
+    Open in Android Studio, sync Gradle, and run the `app` module.
+
+5.  **Set as default phone app:** On first launch TruDial prompts for this. It's required — real-time screening, the incoming-call screen, and call hold only work when TruDial holds the phone/dialer role. Grant the requested permissions (phone, mic, call log, notifications).
 
 ---
 
 ## 🔐 Privacy & Security
 
-We believe your conversations belong to you. TruDial's AI processing is done **100% on-device**. 
-*   **No audio recordings** are sent to remote servers.
-*   **No transcriptions** are uploaded to third parties.
+TruDial has two modes, and they differ in where your call data goes:
+
+*   **On-device mode:** transcription (Android `SpeechRecognizer`) and analysis (MediaPipe LLM) run locally; call audio and transcripts stay on your device.
+*   **Cloud mode (Groq):** when you provide a Groq API key, call **audio is sent to Groq Whisper** for transcription and **transcript text is sent to Groq** for analysis. This is off-device processing — enable it only if you accept that trade-off. Nothing is sent to TruDial's own servers (there are none).
+
+You choose the mode; the active engine is always shown in the logs (`Analysis engine selected: …`).
+
+---
+
+## ⚠️ Known Limitation: Call Audio Capture
+
+Modern Android restricts third-party apps from capturing call audio (anti-recording policy). On many devices the microphone is muted to apps during a call, so live transcription may receive silence even with speaker on. This is a platform/OEM limitation, not an app bug. Use the **Scam Demo** button on the dashboard to run the full transcription → analysis → alert pipeline end-to-end regardless. Reliable live capture on all devices would require a VoIP/telephony-bridge architecture.
+
+Besides that, live transcription has some issues with transcribing Hindi audio correctly. We aim to mitigate this issue by using stronger and more focused models in production.
+
+---
+
+## 🧪 Debugging
+
+All call-flow events use a single log tag:
+
+```bash
+adb logcat -s TruDialCall
+```
+
+You'll see engine selection, per-window mic levels (RMS), transcript segments, each analysis verdict with the matched `indicators=[…]`, risk escalations, holds, and hang-ups.
 
 ---
 

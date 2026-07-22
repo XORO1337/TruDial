@@ -35,6 +35,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
+import kotlinx.coroutines.flow.first
 
 @Composable
 fun AnimatedGradientBackground(content: @Composable () -> Unit) {
@@ -91,7 +92,8 @@ fun SetupWizardScreen(onSetupComplete: () -> Unit) {
                 0 -> LoginStep(onNext = { currentStep = 1 })
                 1 -> ThemeStep(onNext = { currentStep = 2 })
                 2 -> PinStep(onNext = { currentStep = 3 })
-                3 -> ModelDownloadStep(onComplete = { onSetupComplete() })
+                3 -> AiEngineStep(onNext = { currentStep = 4 })
+                4 -> ModelDownloadStep(onComplete = { onSetupComplete() })
             }
         }
     }
@@ -399,6 +401,127 @@ fun PinStep(onNext: () -> Unit) {
 }
 
 @Composable
+fun AiEngineStep(onNext: () -> Unit) {
+    val context = LocalContext.current
+    val settingsManager = remember { SettingsManager(context) }
+    val scope = rememberCoroutineScope()
+
+    val preferCloud by settingsManager.preferCloudLlmFlow.collectAsState(initial = false)
+    val savedGroqKey by settingsManager.groqApiKeyFlow.collectAsState(initial = "")
+    var groqKeyInput by remember { mutableStateOf("") }
+    LaunchedEffect(savedGroqKey) {
+        if (groqKeyInput.isEmpty() && savedGroqKey.isNotEmpty()) groqKeyInput = savedGroqKey
+    }
+
+    // Detect RAM so we can show a recommendation, without forcing the choice.
+    val hasSufficientRam = remember {
+        val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+        val memoryInfo = android.app.ActivityManager.MemoryInfo()
+        activityManager.getMemoryInfo(memoryInfo)
+        memoryInfo.totalMem >= 7L * 1024 * 1024 * 1024
+    }
+
+    Column(
+        modifier = Modifier.fillMaxSize().padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Box(
+            modifier = Modifier.size(80.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(Icons.Default.Memory, contentDescription = "AI Engine", modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.primary)
+        }
+        Spacer(modifier = Modifier.height(24.dp))
+        Text("Choose AI Engine", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = if (hasSufficientRam)
+                "Your device has enough RAM to run the scam detector fully offline. You can also use Groq's cloud model instead."
+            else
+                "Your device is better suited to the cloud model. Provide a Groq API key, or continue with the default cloud API.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(32.dp))
+
+        Card(
+            modifier = Modifier.fillMaxWidth().shadow(8.dp, RoundedCornerShape(16.dp)),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(modifier = Modifier.padding(8.dp)) {
+                EngineOption(
+                    title = "On-device AI" + if (hasSufficientRam) " (Recommended)" else "",
+                    subtitle = "Runs offline. Nothing leaves your phone.",
+                    selected = !preferCloud
+                ) { scope.launch { settingsManager.setPreferCloudLlm(false) } }
+                EngineOption(
+                    title = "Cloud AI (Groq)" + if (!hasSufficientRam) " (Recommended)" else "",
+                    subtitle = "Uses Groq's Llama 3 8B model. Works on any phone.",
+                    selected = preferCloud
+                ) { scope.launch { settingsManager.setPreferCloudLlm(true) } }
+            }
+        }
+
+        AnimatedVisibility(visible = preferCloud) {
+            Column(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
+                OutlinedTextField(
+                    value = groqKeyInput,
+                    onValueChange = { groqKeyInput = it },
+                    label = { Text("Groq API Key") },
+                    placeholder = { Text("gsk_...") },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Text(
+                    "Optional now — you can add it later in Settings. Without a key the app uses the default cloud API.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(48.dp))
+        Button(
+            onClick = {
+                scope.launch {
+                    if (preferCloud) settingsManager.setGroqApiKey(groqKeyInput.trim())
+                    onNext()
+                }
+            },
+            modifier = Modifier.fillMaxWidth().height(56.dp),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Text("Continue", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+        }
+    }
+}
+
+@Composable
+fun EngineOption(title: String, subtitle: String, selected: Boolean, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        RadioButton(selected = selected, onClick = onClick, colors = RadioButtonDefaults.colors(selectedColor = MaterialTheme.colorScheme.primary))
+        Spacer(modifier = Modifier.width(12.dp))
+        Column {
+            Text(title, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal, color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
 fun ModelDownloadStep(onComplete: () -> Unit) {
     var progress by remember { mutableStateOf(0f) }
     var status by remember { mutableStateOf("Initializing secure environment...") }
@@ -419,14 +542,28 @@ fun ModelDownloadStep(onComplete: () -> Unit) {
 
     LaunchedEffect(Unit) {
         delay(800)
-        
+
+        // If the user opted into the cloud engine, skip the on-device model download entirely.
+        val preferCloud = settingsManager.preferCloudLlmFlow.first()
+        if (preferCloud) {
+            status = "Cloud AI selected. Configuring Groq..."
+            settingsManager.setUseLocalLlm(false)
+            progress = 1f
+            delay(1500)
+            status = "Setup Complete! Starting app..."
+            delay(1200)
+            settingsManager.setSetupCompleted(true)
+            onComplete()
+            return@LaunchedEffect
+        }
+
         val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
         val memoryInfo = android.app.ActivityManager.MemoryInfo()
         activityManager.getMemoryInfo(memoryInfo)
-        
+
         val totalMemoryBytes = memoryInfo.totalMem
         val thresholdBytes = 7L * 1024 * 1024 * 1024 // 7GB to account for OS usage on 8GB devices
-        
+
         if (totalMemoryBytes >= thresholdBytes) {
             status = "Sufficient RAM detected. Downloading offline AI scanner..."
             settingsManager.setUseLocalLlm(true)

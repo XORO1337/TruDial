@@ -11,8 +11,10 @@ import androidx.navigation.navArgument
 import com.example.data.IncidentReport
 import com.example.data.SettingsManager
 import com.example.ui.screens.ActiveCallScreen
+import com.example.ui.screens.IncomingCallScreen
 import com.example.ui.screens.AuthScreen
 import com.example.ui.screens.DashboardScreen
+import com.example.ui.screens.DefaultDialerPrompt
 import com.example.ui.screens.ReportScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.screens.SetupWizardScreen
@@ -30,19 +32,28 @@ import androidx.compose.animation.slideOutHorizontally
 @Composable
 fun MainApp(
     startMonitoring: Boolean = false,
+    incomingCall: Boolean = false,
     callerId: String = "",
-    onMonitoringStarted: () -> Unit = {}
+    onMonitoringStarted: () -> Unit = {},
+    onIncomingHandled: () -> Unit = {}
 ) {
     val navController = rememberNavController()
     val context = LocalContext.current
     val dashboardViewModel: DashboardViewModel = viewModel(factory = DashboardViewModelFactory(context))
     val settingsManager = remember { SettingsManager(context) }
-    
+
     val setupCompleted by settingsManager.setupCompletedFlow.collectAsState(initial = null)
+
+    LaunchedEffect(incomingCall) {
+        if (incomingCall) {
+            navController.navigate("incoming_call/$callerId") { launchSingleTop = true }
+            onIncomingHandled()
+        }
+    }
 
     LaunchedEffect(startMonitoring) {
         if (startMonitoring) {
-            navController.navigate("active_call/$callerId")
+            navController.navigate("active_call/$callerId") { launchSingleTop = true }
             onMonitoringStarted()
         }
     }
@@ -78,10 +89,16 @@ fun MainApp(
             )
         }
         composable("dashboard") {
+            // Prompt to become the default phone app if we aren't already (required for screening,
+            // the incoming-call screen, and call hold to function).
+            DefaultDialerPrompt()
             DashboardScreen(
                 viewModel = dashboardViewModel,
                 onSimulateCall = {
                     navController.navigate("active_call/+91-9876543210")
+                },
+                onSimulateScamCall = {
+                    navController.navigate("active_call/+91-11-2743-0000?scam=true")
                 },
                 onReportIncident = { id ->
                     navController.navigate("report/$id")
@@ -101,12 +118,38 @@ fun MainApp(
             CallHistoryScreen(navController = navController)
         }
         composable(
-            "active_call/{callerId}",
+            "incoming_call/{callerId}",
             arguments = listOf(navArgument("callerId") { type = NavType.StringType })
         ) { backStackEntry ->
             val callId = backStackEntry.arguments?.getString("callerId") ?: "Unknown"
+            IncomingCallScreen(
+                callerId = callId,
+                onAnswered = {
+                    navController.navigate("active_call/$callId") {
+                        popUpTo("incoming_call/{callerId}") { inclusive = true }
+                        launchSingleTop = true
+                    }
+                },
+                onDeclined = {
+                    navController.navigate("dashboard") {
+                        popUpTo(navController.graph.startDestinationId) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                }
+            )
+        }
+        composable(
+            "active_call/{callerId}?scam={scam}",
+            arguments = listOf(
+                navArgument("callerId") { type = NavType.StringType },
+                navArgument("scam") { type = NavType.BoolType; defaultValue = false }
+            )
+        ) { backStackEntry ->
+            val callId = backStackEntry.arguments?.getString("callerId") ?: "Unknown"
+            val scam = backStackEntry.arguments?.getBoolean("scam") ?: false
             ActiveCallScreen(
                 incomingCallerId = callId,
+                simulateScam = scam,
                 onCallEnded = { endedCallerId, riskLevel, summary ->
                     val newIncident = IncidentReport(
                         callerId = endedCallerId,
@@ -114,7 +157,12 @@ fun MainApp(
                         transcriptSummary = summary
                     )
                     dashboardViewModel.addIncident(newIncident)
-                    navController.popBackStack("dashboard", inclusive = false)
+                    // Land on the dashboard robustly even when the call flow was launched directly
+                    // from the full-screen intent (so "dashboard" isn't already on the back stack).
+                    navController.navigate("dashboard") {
+                        popUpTo(navController.graph.startDestinationId) { inclusive = true }
+                        launchSingleTop = true
+                    }
                 }
             )
         }

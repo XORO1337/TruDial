@@ -6,9 +6,13 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.ColorLens
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -31,9 +35,16 @@ fun SettingsScreen(onBack: () -> Unit) {
     val pinEnabled by settingsManager.pinEnabledFlow.collectAsState(initial = false)
     val userPin by settingsManager.userPinFlow.collectAsState(initial = "")
     val themeMode by settingsManager.themeModeFlow.collectAsState(initial = "system")
+    val preferCloud by settingsManager.preferCloudLlmFlow.collectAsState(initial = false)
+    val savedGroqKey by settingsManager.groqApiKeyFlow.collectAsState(initial = "")
 
     var showPinDialog by remember { mutableStateOf(false) }
     var newPin by remember { mutableStateOf("") }
+    var groqKeyInput by remember { mutableStateOf("") }
+    // Sync the editable field once the persisted key loads from DataStore.
+    LaunchedEffect(savedGroqKey) {
+        if (groqKeyInput.isEmpty() && savedGroqKey.isNotEmpty()) groqKeyInput = savedGroqKey
+    }
 
     Scaffold(
         topBar = {
@@ -52,6 +63,7 @@ fun SettingsScreen(onBack: () -> Unit) {
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp)
         ) {
             Spacer(modifier = Modifier.height(16.dp))
@@ -124,6 +136,81 @@ fun SettingsScreen(onBack: () -> Unit) {
                     ThemeOptionRow("Dark Mode", themeMode == "dark") { scope.launch { settingsManager.setThemeMode("dark") } }
                 }
             }
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // AI Engine Section
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Cloud, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("AI Engine", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                            Text("Use Cloud AI (Groq)", fontWeight = FontWeight.Bold)
+                            Text(
+                                "Analyze calls with Groq's Llama 3 8B model instead of the on-device model, even on high-RAM phones.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = preferCloud,
+                            onCheckedChange = { checked ->
+                                scope.launch { settingsManager.setPreferCloudLlm(checked) }
+                            },
+                            colors = SwitchDefaults.colors(checkedTrackColor = MaterialTheme.colorScheme.primary)
+                        )
+                    }
+
+                    AnimatedVisibility(visible = preferCloud) {
+                        Column {
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.outlineVariant)
+                            OutlinedTextField(
+                                value = groqKeyInput,
+                                onValueChange = { groqKeyInput = it },
+                                label = { Text("Groq API Key") },
+                                placeholder = { Text("gsk_...") },
+                                singleLine = true,
+                                visualTransformation = PasswordVisualTransformation(),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Button(
+                                onClick = {
+                                    scope.launch { settingsManager.setGroqApiKey(groqKeyInput.trim()) }
+                                },
+                                enabled = groqKeyInput.trim() != savedGroqKey,
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.align(Alignment.End)
+                            ) {
+                                Text(if (savedGroqKey.isEmpty()) "Save Key" else "Update Key")
+                            }
+                            if (savedGroqKey.isEmpty()) {
+                                Text(
+                                    "A key is required for cloud analysis. Falls back to the on-device / default model until set.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 
