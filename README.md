@@ -99,6 +99,8 @@ You choose the mode; the active engine is always shown in the logs (`Analysis en
 
 Modern Android restricts third-party apps from capturing call audio (anti-recording policy). On many devices the microphone is muted to apps during a call, so live transcription may receive silence even with speaker on. This is a platform/OEM limitation, not an app bug. Use the **Scam Demo** button on the dashboard to run the full transcription → analysis → alert pipeline end-to-end regardless. Reliable live capture on all devices would require a VoIP/telephony-bridge architecture.
 
+Besides that, live transcription has some issues with transcribing Hindi audio correctly. We aim to mitigate this issue by using stronger and more focused models in production.
+
 ---
 
 ## 🧪 Debugging
