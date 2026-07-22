@@ -28,7 +28,7 @@
 
 | Dashboard View | Active Call Analysis | Setup & Reporting |
 |:---:|:---:|:---:|
-| <img src="https://placehold.co/400x800/1e293b/cbd5e1?text=Dashboard\nOverview" width="200"> | <img src="https://placehold.co/400x800/1e293b/ef4444?text=Scam\nDetected\nWarning" width="200"> | <img src="https://placehold.co/400x800/1e293b/cbd5e1?text=Incident\nReport" width="200"> |
+| <img src="https://i.ibb.co/60rmGk4d/Screenshot-20260722-193949.png" width="200"> | <img src="https://i.ibb.co/KppT789x/Screenshot-20260722-194018.png" width="200"> | <img src="https://i.ibb.co/NdtR7jts/Screenshot-20260722-201153.png" width="200"> |
 
 *Note: Screenshots are illustrative representations of the UI.*
 
