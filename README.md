@@ -59,7 +59,7 @@
 
 1.  **Clone the Repository:**
     ```bash
-    git clone https://github.com/your-username/trudial.git
+    git clone https://github.com/XORO1337/trudial.git
     cd trudial
     ```
 
