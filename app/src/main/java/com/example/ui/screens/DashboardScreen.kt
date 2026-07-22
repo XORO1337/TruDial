@@ -43,7 +43,12 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.data.IncidentReport
 import com.example.ui.viewmodels.DashboardViewModel
 import com.example.ui.viewmodels.DashboardViewModelFactory
+import com.example.util.ReportExporter
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -61,6 +66,7 @@ fun DashboardScreen(
     val incidents by viewModel.incidents.collectAsState()
     val highRiskCount by viewModel.highRiskCount.collectAsState()
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var permissionsGranted by remember { mutableStateOf(false) }
 
     val roleLauncher = rememberLauncherForActivityResult(
@@ -71,6 +77,17 @@ fun DashboardScreen(
             permissionsGranted = true
         } else {
             Toast.makeText(context, "Call Screening role required.", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    // Pre-Android-10 needs WRITE_EXTERNAL_STORAGE to save the PDF to Downloads.
+    val exportPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            exportReport(context, incidents, scope)
+        } else {
+            Toast.makeText(context, "Storage permission required to export report.", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -129,7 +146,19 @@ fun DashboardScreen(
                     IconButton(onClick = onHistoryClick) {
                         Icon(Icons.Default.History, contentDescription = "Call History")
                     }
-                    IconButton(onClick = { exportReport(context, incidents) }) {
+                    IconButton(onClick = {
+                        // API 29+ writes via MediaStore (no permission). Older versions
+                        // need WRITE_EXTERNAL_STORAGE granted at runtime first.
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q ||
+                            ContextCompat.checkSelfPermission(
+                                context, Manifest.permission.WRITE_EXTERNAL_STORAGE
+                            ) == PackageManager.PERMISSION_GRANTED
+                        ) {
+                            exportReport(context, incidents, scope)
+                        } else {
+                            exportPermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                        }
+                    }) {
                         Icon(Icons.Default.FileDownload, contentDescription = "Export Report")
                     }
                     IconButton(onClick = onSettingsClick) {
@@ -455,6 +484,16 @@ fun RiskBadge(riskLevel: String) {
     }
 }
 
-fun exportReport(context: Context, incidents: List<IncidentReport>) {
-    Toast.makeText(context, "Report exported securely", Toast.LENGTH_SHORT).show()
+fun exportReport(
+    context: Context,
+    incidents: List<IncidentReport>,
+    scope: CoroutineScope
+) {
+    scope.launch {
+        val location = withContext(Dispatchers.IO) {
+            ReportExporter.exportToDownloads(context, incidents)
+        }
+        val message = if (location != null) "Report saved to $location" else "Export failed"
+        Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+    }
 }
