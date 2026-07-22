@@ -1,0 +1,6 @@
+{
+  "name": "TruDial",
+  "description": "Protects against digital arrests and scams using real-time call analysis.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
